@@ -34,25 +34,25 @@ const Dashboard = ({ onNavigate }) => {
             {/* Info Boxes giữ nguyên code cũ */}
             <div className="col-12 col-sm-6 col-md-3">
               <div className="info-box shadow-sm">
-                <span className="info-box-icon bg-danger elevation-1"><i className="fas fa-microchip"></i></span>
+                <span className="info-box-icon bg-danger elevation-1"><i className="fas fa-microchip text-white"></i></span>
                 <div className="info-box-content"><span className="info-box-text text-muted">CPU Usage</span><span className="info-box-number h5 mb-1">{stats.cpu}%</span><div className="progress" style={{height:'4px'}}><div className="progress-bar bg-danger" style={{width:`${stats.cpu}%`}}></div></div></div>
               </div>
             </div>
             <div className="col-12 col-sm-6 col-md-3">
               <div className="info-box shadow-sm">
-                <span className="info-box-icon bg-primary elevation-1"><i className="fas fa-memory"></i></span>
+                <span className="info-box-icon bg-primary elevation-1"><i className="fas fa-memory text-white"></i></span>
                 <div className="info-box-content"><span className="info-box-text text-muted">RAM Usage</span><span className="info-box-number h5 mb-1">{`${stats.ramUsage}GB | ${stats.ramTotal}GB`}</span><div className="progress" style={{height:'4px'}}><div className="progress-bar bg-primary" style={{width:`${stats.ram}%`}}></div></div></div>
               </div>
             </div>
             <div className="col-12 col-sm-6 col-md-3">
               <div className="info-box shadow-sm">
-                <span className="info-box-icon bg-success elevation-1"><i className="fas fa-users"></i></span>
+                <span className="info-box-icon bg-success elevation-1"><i className="fas fa-users text-white"></i></span>
                 <div className="info-box-content"><span className="info-box-text text-muted">Online Players</span><span className="info-box-number h5 mb-1">{stats.players} / {stats.maxPlayers}</span><div className="progress" style={{height:'4px'}}><div className="progress-bar bg-success" style={{width:`${playerPercent}%`}}></div></div></div>
               </div>
             </div>
             <div className="col-12 col-sm-6 col-md-3">
               <div className="info-box shadow-sm">
-                <span className="info-box-icon bg-warning elevation-1"><i className="fas fa-tachometer-alt text-white"></i></span>
+                <span className="info-box-icon bg-info elevation-1"><i className="fas fa-tachometer-alt text-white"></i></span>
                 <div className="info-box-content"><span className="info-box-text text-muted">TPS</span><span className="info-box-number h5 mb-1">{stats.tps}</span><div className="progress" style={{height:'4px'}}><div className="progress-bar bg-warning" style={{width:`${tpsPercent}%`}}></div></div></div>
               </div>
             </div>
