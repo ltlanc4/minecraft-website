@@ -40,9 +40,9 @@ const loginLimiter = rateLimit({
 
 // --- CẤU HÌNH RCON ---
 const RCON_OPTIONS = {
-    host: process.env.RCON_HOST || 'localhost',
-    port: parseInt(process.env.RCON_PORT) || 25575,
-    password: process.env.RCON_PASSWORD || 'your_password',
+    host: process.env.RCON_HOST,
+    port: parseInt(process.env.RCON_PORT),
+    password: process.env.RCON_PASSWORD,
     timeout: 5000, 
     tcp: true
 };
@@ -202,7 +202,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     try {
         const [cpu, mem, mc] = await Promise.all([si.currentLoad(), si.mem(), getMinecraftData()]);
         res.json({
-            hardware: { cpu: cpu.currentLoad.toFixed(1), ram: ((mem.active / mem.total) * 100).toFixed(1) },
+            hardware: { cpu: cpu.currentLoad.toFixed(0), ram: `${(mem.active / Math.pow(1024, 3)).toFixed(0)} | ${(mem.total / Math.pow(1024, 3)).toFixed(0)}` },
             minecraft: mc
         });
     } catch (e) { res.status(500).json({ error: "Internal Error" }); }
