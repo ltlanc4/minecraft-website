@@ -183,7 +183,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     try {
         const [cpu, mem, mc] = await Promise.all([si.currentLoad(), si.mem(), getMinecraftData()]);
         res.json({
-            hardware: { cpu: cpu.currentLoad.toFixed(1), ram: ((mem.active / mem.total) * 100).toFixed(1) },
+            hardware: { cpu: cpu.currentLoad.toFixed(0), ram: `${(mem.active / Math.pow(1024, 3)).toFixed(0)}GB | ${(mem.total / Math.pow(1024, 3)).toFixed(0)}GB` },
             minecraft: mc
         });
     } catch (e) { res.status(500).json({ error: "Internal Error" }); }
