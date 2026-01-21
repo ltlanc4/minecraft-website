@@ -40,9 +40,9 @@ const loginLimiter = rateLimit({
 
 // --- CẤU HÌNH RCON ---
 const RCON_OPTIONS = {
-    host: process.env.RCON_HOST || 'localhost',
-    port: parseInt(process.env.RCON_PORT) || 25575,
-    password: process.env.RCON_PASSWORD || 'your_password',
+    host: process.env.RCON_HOST,
+    port: parseInt(process.env.RCON_PORT),
+    password: process.env.RCON_PASSWORD,
     timeout: 5000, 
     tcp: true
 };
