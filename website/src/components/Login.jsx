@@ -80,7 +80,7 @@ const Login = ({ onLoginSuccess }) => {
             <h1 className="h1 fw-bold text-primary">Minecraft <span className="text-dark">Panel</span></h1>
           </div>
           <div className="card-body px-4 pb-4">
-            <p className="login-box-msg text-muted">Đăng nhập hệ thống quản trị</p>
+            <p className="login-box-msg text-muted">Đăng nhập hệ thống</p>
             
             <form onSubmit={handleSubmit}>
               <div className="input-group mb-3">
