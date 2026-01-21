@@ -40,9 +40,9 @@ const loginLimiter = rateLimit({
 
 // --- CẤU HÌNH RCON ---
 const RCON_OPTIONS = {
-    host: process.env.RCON_HOST,
-    port: parseInt(process.env.RCON_PORT),
-    password: process.env.RCON_PASSWORD,
+    host: process.env.RCON_HOST || 'localhost',
+    port: parseInt(process.env.RCON_PORT) || 25575,
+    password: process.env.RCON_PASSWORD || 'your_password',
     timeout: 5000, 
     tcp: true
 };
@@ -54,12 +54,9 @@ const CACHE_DURATION = 5000;
 // --- HELPER: VALIDATE INPUT ---
 const isValidMcName = (name) => /^[a-zA-Z0-9_]{3,16}$/.test(name);
 
-// --- HELPER: SANITIZE REASON (HỖ TRỢ TIẾNG VIỆT) ---
-// Hàm này chỉ xóa các ký tự nguy hiểm có thể gây lỗi lệnh RCON (; " \ ' $)
-// Còn lại giữ nguyên Tiếng Việt và các dấu câu thông thường (! ? , .)
+// --- HELPER: SANITIZE REASON ---
 const sanitizeReason = (text) => {
     if (!text) return "Admin Action";
-    // Thay thế các ký tự nguy hiểm bằng rỗng
     return text.replace(/[;\\"'$<>{}]/g, "").trim();
 };
 
@@ -145,23 +142,45 @@ const authenticateToken = (req, res, next) => {
 
 // --- ROUTES ---
 
+// LOGIN ROUTE (ĐÃ CẬP NHẬT CHECK PERMISSION)
 app.post('/api/login', loginLimiter, (req, res) => {
     const { username, password } = req.body;
+    
+    // 1. Log ra terminal để xem User nhập cái gì (Debug)
+    console.log(`[LOGIN TRY] User: ${username} | Pass: ${password}`);
+
     if (!username || !password) return res.status(400).json({ success: false, message: "Thiếu thông tin" });
 
     try {
         const accounts = JSON.parse(fs.readFileSync('./data/accounts.json', 'utf8'));
+        
         const user = accounts.find(a => a.username === username && a.password === password);
+        
         if (user) {
-            const payload = { username: user.username, role: user.role };
+
+            // --- FIX: Dùng parseInt để chấp nhận cả "1" và 1 ---
+            // Nếu permission không tồn tại hoặc parse ra không phải 1 thì chặn
+            if (!user.permission || parseInt(user.permission) !== 1) {
+                return res.status(403).json({ success: false, message: 'Tài khoản không có quyền Admin.' });
+            }
+            // ----------------------------------------------------
+
+            console.log(`[LOGIN SUCCESS] Cấp Token cho ${user.username}`);
+
+            const payload = { username: user.username, permission: user.permission };
             const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' });
             const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
             refreshTokens.push(refreshToken);
+            
             res.json({ success: true, accessToken, refreshToken, user: payload });
         } else {
-            res.status(401).json({ success: false, message: 'Sai thông tin đăng nhập' }); 
+            console.log(`[LOGIN FAIL] Sai thông tin`);
+            res.status(401).json({ success: false, message: 'Sai tài khoản hoặc mật khẩu' }); 
         }
-    } catch { res.status(500).json({ success: false, message: "Lỗi server" }); }
+    } catch (e) { 
+        console.error("Lỗi đọc file/server:", e);
+        res.status(500).json({ success: false, message: "Lỗi server nội bộ" }); 
+    }
 });
 
 app.post('/api/refresh', (req, res) => {
@@ -169,7 +188,7 @@ app.post('/api/refresh', (req, res) => {
     if (!refreshToken || !refreshTokens.includes(refreshToken)) return res.sendStatus(403);
     jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
         if (err) return res.sendStatus(403);
-        const accessToken = jwt.sign({ username: user.username, role: user.role }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' });
+        const accessToken = jwt.sign({ username: user.username, permission: user.permission }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' });
         res.json({ accessToken });
     });
 });
@@ -183,7 +202,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     try {
         const [cpu, mem, mc] = await Promise.all([si.currentLoad(), si.mem(), getMinecraftData()]);
         res.json({
-            hardware: { cpu: cpu.currentLoad.toFixed(0), ram: `${(mem.active / Math.pow(1024, 3)).toFixed(0)}GB | ${(mem.total / Math.pow(1024, 3)).toFixed(0)}GB` },
+            hardware: { cpu: cpu.currentLoad.toFixed(1), ram: ((mem.active / mem.total) * 100).toFixed(1) },
             minecraft: mc
         });
     } catch (e) { res.status(500).json({ error: "Internal Error" }); }
@@ -203,27 +222,20 @@ app.get('/api/player/banlist', authenticateToken, async (req, res) => {
 app.post('/api/player/kick', authenticateToken, async (req, res) => {
     const { player, reason } = req.body;
     if (!isValidMcName(player)) return res.status(400).json({ success: false, message: "Tên người chơi không hợp lệ" });
-    
-    // Sử dụng hàm sanitize mới cho phép tiếng Việt
     const safeReason = sanitizeReason(reason);
-    
     res.json({ success: true, message: await sendRconCommand(`kick ${player} ${safeReason}`) });
 });
 
 app.post('/api/player/ban', authenticateToken, async (req, res) => {
     const { player, reason } = req.body;
     if (!isValidMcName(player)) return res.status(400).json({ success: false, message: "Tên người chơi không hợp lệ" });
-    
-    // Sử dụng hàm sanitize mới cho phép tiếng Việt
     const safeReason = sanitizeReason(reason);
-    
     res.json({ success: true, message: await sendRconCommand(`ban ${player} ${safeReason}`) });
 });
 
 app.post('/api/player/unban', authenticateToken, async (req, res) => {
     const { player } = req.body;
     if (!isValidMcName(player)) return res.status(400).json({ success: false, message: "Tên người chơi không hợp lệ" });
-
     const msg = await sendRconCommand(`pardon ${player}`);
     if (msg.includes("Nothing changed")) return res.json({ success: false, message: "Không tìm thấy" });
     res.json({ success: true, message: msg });
@@ -241,4 +253,4 @@ app.post('/api/player/deop', authenticateToken, async (req, res) => {
     res.json({ success: true, message: await sendRconCommand(`deop ${player}`) });
 });
 
-app.listen(process.env.PORT || 5000, () => console.log('Server Securely Running (Vietnamese Support)...'));
+app.listen(process.env.PORT || 5000, () => console.log('Server Securely Running (Permission Checked)...'));

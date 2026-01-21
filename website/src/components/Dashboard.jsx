@@ -61,7 +61,7 @@ const Dashboard = ({ onNavigate }) => {
           <div className="row">
             <div className="col-md-8">
               <div className="card shadow-sm h-100">
-                <div className="card-header border-0"><h3 className="card-title text-muted">Giám sát Tài nguyên (Live)</h3></div>
+                <div className="card-header border-0"><h3 className="card-title text-muted">Giám sát Tài nguyên</h3></div>
                 <div className="card-body"><div className="chart" style={{ height: '350px' }}><Line data={chartData} options={chartOptions} /></div></div>
               </div>
             </div>

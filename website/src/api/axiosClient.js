@@ -1,8 +1,8 @@
 import axios from 'axios';
-import Swal from 'sweetalert2'; // Import thêm Swal để hiện thông báo đẹp
+import Swal from 'sweetalert2';
 
 const axiosClient = axios.create({
-  baseURL: 'http://localhost:5000/api', // Đảm bảo đúng cổng Backend
+  baseURL: 'http://localhost:5000/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -17,33 +17,43 @@ axiosClient.interceptors.response.use(
   async (err) => {
     const originalConfig = err.config;
 
-    // --- XỬ LÝ LỖI RATE LIMIT (MỚI THÊM) ---
+    // --- QUAN TRỌNG: NẾU ĐANG ĐĂNG NHẬP THÌ BỎ QUA INTERCEPTOR ---
+    // Để Login.jsx tự hiện thông báo lỗi, không được reload trang ở đây
+    if (originalConfig.url === '/login' || originalConfig.url.includes('login')) {
+        return Promise.reject(err);
+    }
+    // -------------------------------------------------------------
+
+    // Xử lý Rate Limit (429)
     if (err.response && err.response.status === 429) {
        Swal.fire({
          icon: 'warning',
          title: 'Thao tác quá nhanh!',
-         text: 'Bạn đang gửi quá nhiều yêu cầu. Vui lòng đợi một chút.',
+         text: 'Vui lòng đợi một chút.',
          timer: 5000
        });
        return Promise.reject(err);
     }
-    // ---------------------------------------
 
-    // XỬ LÝ HẾT HẠN TOKEN (GIỮ NGUYÊN)
+    // Xử lý Token hết hạn (403) - CHỈ ÁP DỤNG KHI KHÔNG PHẢI LÀ LOGIN
     if (err.response?.status === 403 && !originalConfig._retry) {
       originalConfig._retry = true;
       try {
         const refreshToken = localStorage.getItem('refreshToken');
+        // Nếu không có refresh token thì thôi, không gọi api refresh làm gì
+        if (!refreshToken) throw new Error("No refresh token");
+
         const res = await axios.post('http://localhost:5000/api/refresh', { refreshToken });
         localStorage.setItem('accessToken', res.data.accessToken);
         originalConfig.headers.Authorization = `Bearer ${res.data.accessToken}`;
         return axiosClient(originalConfig);
       } catch (_error) {
         localStorage.clear();
-        window.location.href = '/';
+        window.location.href = '/'; // Đá về trang login
         return Promise.reject(_error);
       }
     }
+    
     return Promise.reject(err);
   }
 );

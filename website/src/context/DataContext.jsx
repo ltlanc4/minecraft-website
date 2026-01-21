@@ -11,8 +11,8 @@ export const DataProvider = ({ children }) => {
   const [chartData, setChartData] = useState({
     labels: [],
     datasets: [
-      { label: 'CPU Usage', data: [], borderColor: '#dc3545', backgroundColor: 'rgba(220, 53, 69, 0.2)', tension: 0.4, fill: true, pointRadius: 0, pointHoverRadius: 6, borderWidth: 2 },
-      { label: 'RAM Usage', data: [], borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.2)', tension: 0.4, fill: true, pointRadius: 0, pointHoverRadius: 6, borderWidth: 2 },
+      { label: ' CPU Usage       ', data: [], borderColor: '#dc3545', backgroundColor: 'rgba(220, 53, 69, 0.2)', tension: 0.4, fill: true, pointRadius: 0, pointHoverRadius: 6, borderWidth: 2 },
+      { label: ' RAM Usage', data: [], borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.2)', tension: 0.4, fill: true, pointRadius: 0, pointHoverRadius: 6, borderWidth: 2 },
     ],
   });
 
