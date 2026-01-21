@@ -28,6 +28,33 @@
   color: #61dafb;
 }
 
+/* 1. Animation cho Sidebar và Khung chính */
+.app-sidebar, 
+.app-header, 
+.app-main, 
+.app-footer {
+  /* Thời gian chạy animation: 0.3 giây */
+  transition: margin-left 0.3s ease-in-out, min-width 0.3s ease-in-out, max-width 0.3s ease-in-out, transform 0.3s ease-in-out !important;
+}
+
+/* 2. Animation Fade-in khi chuyển Tab (Dashboard -> Player) */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in-view {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* 3. Hiệu ứng xoay icon Hamburger khi đóng mở (Tùy chọn) */
+.sidebar-collapse .nav-link .fa-bars {
+  transition: transform 0.3s;
+}
+.nav-link .fa-bars {
+  transition: transform 0.3s;
+}
+
 @keyframes App-logo-spin {
   from {
     transform: rotate(0deg);

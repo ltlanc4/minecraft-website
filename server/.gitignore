@@ -1,0 +1,4 @@
+./data/accounts.json
+.env
+.package-lock.json
+node_modules

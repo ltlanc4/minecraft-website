@@ -1,414 +1,119 @@
-import React, { useState, useEffect } from "react"
-
-import Swal from "sweetalert2"
+import React, { useState } from 'react';
+import axiosClient from '../api/axiosClient';
+import Swal from 'sweetalert2';
+import { useData } from '../context/DataContext';
+import { motion } from 'framer-motion'; // <--- Import
 
 const PlayerManager = () => {
-  const [onlinePlayers, setOnlinePlayers] = useState([])
-
-  const [bannedPlayers, setBannedPlayers] = useState([])
-
-  const [loading, setLoading] = useState(false)
-
-  // --- HÀM LOAD DỮ LIỆU ---
-
-  const fetchData = async () => {
-    setLoading(true)
-
-    try {
-      // 1. Lấy danh sách Online (Tận dụng API dashboard cũ)
-
-      const resOnline = await fetch("http://localhost:5000/api/dashboard")
-
-      const dataOnline = await resOnline.json()
-
-      setOnlinePlayers(dataOnline.minecraft.list || [])
-
-      // 2. Lấy danh sách Banned
-
-      const resBan = await fetch("http://localhost:5000/api/player/banlist")
-
-      const dataBan = await resBan.json()
-
-      setBannedPlayers(dataBan.list || [])
-    } catch (error) {
-      console.error("Lỗi tải dữ liệu:", error)
-    }
-
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    fetchData()
-  }, [])
-
-  // --- HÀM XỬ LÝ KICK / BAN ---
+  const [activeTab, setActiveTab] = useState('online');
+  const { onlineList, bannedList, refreshData } = useData();
 
   const handleAction = async (player, actionType) => {
-    // 1. Hiện Popup nhập lý do
-
     const { value: reason, isDismissed } = await Swal.fire({
-      title: `${actionType.toUpperCase()} ${player}?`,
-
-      input: "text",
-
-      inputPlaceholder: "Nhập lý do (để trống cũng được)...",
-
-      showCancelButton: true,
-
-      confirmButtonText: "Thực hiện",
-
-      confirmButtonColor: actionType === "ban" ? "#d33" : "#ffc107", // Ban màu đỏ, Kick màu vàng
-
-      cancelButtonText: "Hủy",
-    })
-
-    if (isDismissed) return
-
-    // 2. Gửi API
-
+      title: `${actionType.toUpperCase()} ${player}?`, input: 'text', showCancelButton: true, confirmButtonText: 'Xác nhận', confirmButtonColor: actionType === 'ban' ? '#d33' : '#ffc107',
+    });
+    if (isDismissed) return;
     try {
-      const response = await fetch(
-        `http://localhost:5000/api/player/${actionType}`,
-
-        {
-          method: "POST",
-
-          headers: { "Content-Type": "application/json" },
-
-          body: JSON.stringify({ player, reason: reason || "" }), // Gửi chuỗi rỗng nếu không nhập
-        }
-      )
-
-      const result = await response.json()
-
-      if (result.success) {
-        Swal.fire(
-          "Thành công!",
-
-          `Đã ${actionType} người chơi. Server: ${result.message}`,
-
-          "success"
-        )
-
-        fetchData() // Load lại danh sách
-      } else {
-        Swal.fire("Lỗi!", result.error, "error")
-      }
-    } catch (err) {
-      Swal.fire("Lỗi kết nối!", "Không gọi được API", "error")
-    }
-  }
-
-  // --- HÀM XỬ LÝ UNBAN ---
+      const res = await axiosClient.post(`/player/${actionType}`, { player, reason: reason || "Admin" });
+      if (res.data.success) { Swal.fire('OK', res.data.message, 'success'); refreshData(); }
+      else { Swal.fire('Lỗi', res.data.message, 'error'); }
+    } catch { Swal.fire('Lỗi', 'Lỗi kết nối', 'error'); }
+  };
 
   const handleUnban = async (player) => {
-    const result = await Swal.fire({
-      title: `Gỡ Ban cho ${player}?`,
-
-      text: "Người chơi sẽ có thể vào lại server.",
-
-      icon: "question",
-
-      showCancelButton: true,
-
-      confirmButtonColor: "#28a745",
-
-      confirmButtonText: "Unban ngay",
-    })
-
-    if (!result.isConfirmed) return
-
+    const result = await Swal.fire({ title: `Gỡ cấm ${player}?`, icon: 'question', showCancelButton: true, confirmButtonColor: '#28a745' });
+    if (!result.isConfirmed) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/player/unban`, {
-        method: "POST",
-
-        headers: { "Content-Type": "application/json" },
-
-        body: JSON.stringify({ player }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        Swal.fire("Đã Unban!", `Người chơi ${player} đã được tha.`, "success")
-
-        fetchData()
-      }
-    } catch (err) {
-      Swal.fire("Lỗi", "Không thể unban", "error")
-    }
-  }
-
-  // Thêm hàm xử lý OP vào trong component PlayerManager
+      const res = await axiosClient.post('/player/unban', { player });
+      if (res.data.success) { Swal.fire('OK', 'Đã Unban', 'success'); refreshData(); }
+      else { Swal.fire('Lỗi', res.data.message, 'error'); }
+    } catch { Swal.fire('Lỗi', 'Lỗi API', 'error'); }
+  };
 
   const handleOpAction = async (player, action) => {
-    // action là 'op' hoặc 'deop'
-
-    const isOp = action === "op"
-
-    // Cấu hình thông báo Popup khác nhau tùy hành động
-
-    const result = await Swal.fire({
-      title: isOp
-        ? `Trao quyền OP cho ${player}?`
-        : `Tước quyền OP của ${player}?`,
-
-      text: isOp
-        ? "CẢNH BÁO: Người này sẽ có toàn quyền kiểm soát server!"
-        : "Người này sẽ trở thành người chơi thường.",
-
-      icon: isOp ? "warning" : "info", // Cảnh báo vàng nếu cấp OP
-
-      showCancelButton: true,
-
-      confirmButtonColor: isOp ? "#ffc107" : "#6c757d", // Màu vàng hoặc xám
-
-      confirmButtonText: isOp ? "Xác nhận Thăng chức" : "Xác nhận Hạ chức",
-
-      cancelButtonText: "Hủy bỏ",
-    })
-
-    if (!result.isConfirmed) return
-
-    // Gọi API
-
-    try {
-      const response = await fetch(
-        `http://localhost:5000/api/player/${action}`,
-
-        {
-          method: "POST",
-
-          headers: { "Content-Type": "application/json" },
-
-          body: JSON.stringify({ player }),
-        }
-      )
-
-      const data = await response.json()
-
-      if (data.success) {
-        Swal.fire(
-          "Thành công",
-
-          `Server phản hồi: ${data.message}`,
-
-          "success"
-        )
-      } else {
-        Swal.fire("Lỗi", data.error, "error")
-      }
-    } catch (err) {
-      Swal.fire("Lỗi kết nối", "Không thể gọi tới Server", "error")
-    }
-  }
+      const isOp = action === 'op';
+      const { value: inputValue, isDismissed } = await Swal.fire({
+          title: isOp ? `CẤP QUYỀN OP?` : `HỦY QUYỀN OP?`, html: `Nhập lại tên <b>${player}</b> để xác nhận.`, icon: 'warning', input: 'text', inputPlaceholder: player, showCancelButton: true, confirmButtonText: isOp ? 'Cấp ngay' : 'Hủy ngay', confirmButtonColor: isOp ? '#ffc107' : '#6c757d',
+          preConfirm: (input) => { if (input !== player) Swal.showValidationMessage(`Tên không khớp!`); }
+      });
+      if (isDismissed) return;
+      await axiosClient.post(`/player/${action}`, { player });
+      Swal.fire('Thành công', `Đã ${isOp?'Trao':'Tước'} quyền OP`, 'success');
+  };
 
   return (
-    <div className='content-wrapper'>
-      <section className='content-header'>
-        <div className='container-fluid'>
-          <h1>Quản lý Người chơi</h1>
-        </div>
-      </section>
-
-      <section className='content'>
-        <div className='container-fluid'>
-          <div className='card card-primary card-tabs'>
-            <div className='card-header p-0 pt-1'>
-              <ul
-                className='nav nav-tabs'
-                id='custom-tabs-one-tab'
-                role='tablist'
-              >
-                <li className='nav-item'>
-                  <a
-                    className='nav-link active'
-                    id='tab-online'
-                    data-toggle='pill'
-                    href='#content-online'
-                    role='tab'
-                  >
-                    Online Players{" "}
-                    <span className='badge badge-success'>
-                      {onlinePlayers.length}
-                    </span>
-                  </a>
-                </li>
-
-                <li className='nav-item'>
-                  <a
-                    className='nav-link'
-                    id='tab-banned'
-                    data-toggle='pill'
-                    href='#content-banned'
-                    role='tab'
-                  >
-                    Banned Players{" "}
-                    <span className='badge badge-danger'>
-                      {bannedPlayers.length}
-                    </span>
-                  </a>
-                </li>
+    // Motion Wrapper
+    <motion.div 
+      className="content-wrapper"
+      initial={{ opacity: 0, x: -20 }} // Trượt nhẹ từ trái sang
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <section className="content-header"><div className="container-fluid"><h1 className="fw-bold">Quản lý Người chơi</h1></div></section>
+      <section className="content">
+        <div className="container-fluid">
+          <div className="card card-primary card-outline card-outline-tabs border-0 shadow-none bg-transparent">
+            <div className="card-header p-0 border-bottom-0 mb-3 bg-white rounded shadow-sm">
+              <ul className="nav nav-tabs">
+                <li className="nav-item"><a className={`nav-link ${activeTab==='online'?'active fw-bold':''}`} onClick={()=>setActiveTab('online')} href="#"><i className="fas fa-signal me-2 text-success"></i>Online ({onlineList.length})</a></li>
+                <li className="nav-item"><a className={`nav-link ${activeTab==='banned'?'active fw-bold':''}`} onClick={()=>setActiveTab('banned')} href="#"><i className="fas fa-ban me-2 text-danger"></i>Banned ({bannedList.length})</a></li>
               </ul>
             </div>
-
-            <div className='card-body'>
-              <div className='tab-content'>
-                {/* TAB ONLINE: KICK & BAN */}
-
-                <div
-                  className='tab-pane fade show active'
-                  id='content-online'
-                  role='tabpanel'
-                >
-                  <button
-                    className='btn btn-sm btn-secondary mb-3'
-                    onClick={fetchData}
-                  >
-                    <i className='fas fa-sync'></i> Làm mới
-                  </button>
-
-                  <table className='table table-hover table-striped'>
-                    <thead>
-                      <tr>
-                        <th style={{ width: "60px" }}>Avatar</th>
-                        <th>Tên người chơi</th>
-                        <th>Trừng phạt</th> {/* Cột Kick/Ban */}
-                        <th>Quyền hạn</th> {/* Cột OP/Deop mới */}
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {" "}
-                      {onlinePlayers.length === 0 ? (
-                        <tr>
-                          <td colSpan='4' className='text-center'>
-                            Không có ai online
-                          </td>
-                        </tr>
-                      ) : (
-                        onlinePlayers.map((p, index) => (
-                          <tr key={index}>
-                            <td>
-                              <img
-                                src={`https://minotar.net/avatar/${p}/32.png`}
-                                alt={p}
-                                className='rounded'
-                              />
-                            </td>
-
-                            <td className='align-middle font-weight-bold'>
-                              {p}
-                            </td>
-
-                            {/* CỘT QUẢN LÝ THƯỜNG (KICK/BAN) */}
-
-                            <td>
-                              <button
-                                onClick={() => handleAction(p, "kick")}
-                                className='btn btn-default btn-sm mr-1'
-                                title='Kick'
-                              >
-                                <i className='fas fa-boot text-warning'></i>
-                              </button>
-
-                              <button
-                                onClick={() => handleAction(p, "ban")}
-                                className='btn btn-default btn-sm'
-                                title='Ban'
-                              >
-                                <i className='fas fa-gavel text-danger'></i>
-                              </button>
-                            </td>
-
-                            {/* CỘT QUẢN LÝ OP (MỚI) */}
-
-                            <td>
-                              <div className='btn-group'>
-                                <button
-                                  onClick={() => handleOpAction(p, "op")}
-                                  className='btn btn-outline-warning btn-sm'
-                                  title='Cấp quyền OP'
-                                >
-                                  <i className='fas fa-star'></i> OP
-                                </button>
-
-                                <button
-                                  onClick={() => handleOpAction(p, "deop")}
-                                  className='btn btn-outline-secondary btn-sm'
-                                  title='Hủy quyền OP'
-                                >
-                                  <i className='fas fa-user-slash'></i> Deop
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* TAB BANNED: UNBAN */}
-
-                <div
-                  className='tab-pane fade'
-                  id='content-banned'
-                  role='tabpanel'
-                >
-                  <button
-                    className='btn btn-sm btn-secondary mb-3'
-                    onClick={fetchData}
-                  >
-                    <i className='fas fa-sync'></i> Làm mới
-                  </button>
-
-                  <table className='table table-hover'>
-                    <thead>
-                      <tr>
-                        <th>Tên người chơi</th>
-
-                        <th>Hành động</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {bannedPlayers.length === 0 ? (
-                        <tr>
-                          <td colSpan='2' className='text-center'>
-                            Danh sách sạch sẽ!
-                          </td>
-                        </tr>
-                      ) : (
-                        bannedPlayers.map((p, index) => (
-                          <tr key={index}>
-                            <td className='text-danger font-weight-bold'>
-                              {p}
-                            </td>
-
-                            <td>
-                              <button
-                                onClick={() => handleUnban(p)}
-                                className='btn btn-success btn-sm'
-                              >
-                                <i className='fas fa-unlock'></i> Unban (Pardon)
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+            
+            <div className="card-body p-0">
+              <div className="d-flex justify-content-end mb-3">
+                 <button className="btn btn-sm btn-light shadow-sm text-primary fw-bold" onClick={refreshData}><i className="fas fa-sync-alt me-1"></i> Làm mới danh sách</button>
               </div>
-            </div>
 
-            {/* /.card */}
+              {activeTab === 'online' && (
+                 <div className="list-group bg-transparent"> 
+                   {onlineList.length === 0 ? (
+                      <div className="text-center py-5 text-muted bg-white rounded shadow-sm"><i className="fas fa-ghost fa-2x mb-2"></i><p>Không có ai online</p></div>
+                   ) : (
+                      onlineList.map((p, i) => (
+                        <div key={i} className="list-group-item border-0 shadow-sm rounded mb-2 py-3">
+                          <div className="row align-items-center g-3"> 
+                            <div className="col-12 col-md-6 d-flex align-items-center">
+                              <div className="position-relative"><img src={`https://minotar.net/helm/${p}/40.png`} className="rounded shadow-sm border" alt="" width="48" height="48"/><span className="position-absolute bottom-0 end-0 bg-success border border-white rounded-circle" style={{width:14, height:14}}></span></div>
+                              <div className="ms-3"><span className="fw-bold d-block text-dark" style={{fontSize:'1.1rem'}}>{p}</span><small className="text-muted bg-light px-2 py-1 rounded" style={{fontSize:'0.8rem'}}><i className="fas fa-wifi text-success me-1"></i>Ổn định</small></div>
+                            </div>
+                            <div className="col-12 col-md-6">
+                              <div className="d-flex flex-wrap justify-content-start justify-content-md-end gap-2">
+                                <button onClick={()=>handleAction(p,'kick')} className="btn btn-outline-warning btn-sm fw-bold px-3">Kick</button>
+                                <button onClick={()=>handleAction(p,'ban')} className="btn btn-outline-danger btn-sm fw-bold px-3">Ban</button>
+                                <div className="vr d-none d-md-block mx-1"></div>
+                                <button onClick={()=>handleOpAction(p,'op')} className="btn btn-light btn-sm text-warning fw-bold border">OP</button>
+                                <button onClick={()=>handleOpAction(p,'deop')} className="btn btn-light btn-sm text-secondary fw-bold border">Deop</button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                   )}
+                 </div>
+              )}
+
+              {activeTab === 'banned' && (
+                  <div className="list-group bg-transparent">
+                    {bannedList.length === 0 ? (
+                        <div className="text-center py-5 text-muted bg-white rounded shadow-sm"><i className="fas fa-check-circle fa-2x mb-2 text-success"></i><p>Danh sách sạch sẽ</p></div>
+                    ) : (
+                        bannedList.map((p, i) => (
+                            <div key={i} className="list-group-item border-0 shadow-sm rounded mb-2 py-3">
+                                <div className="d-flex justify-content-between align-items-center">
+                                    <div className="d-flex align-items-center"><div className="bg-danger bg-opacity-10 p-2 rounded me-3 text-danger"><i className="fas fa-user-slash fa-lg"></i></div><div><span className="fw-bold text-dark d-block">{p}</span><small className="text-danger">Đang bị cấm</small></div></div>
+                                    <button onClick={()=>handleUnban(p)} className="btn btn-success btn-sm shadow-sm px-3 fw-bold"><i className="fas fa-unlock-alt me-1"></i> Gỡ</button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                  </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
-    </div>
-  )
-}
-
-export default PlayerManager
+    </motion.div>
+  );
+};
+export default PlayerManager;

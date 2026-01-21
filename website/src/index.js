@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import 'admin-lte/dist/css/adminlte.min.css';       // Giao diện chính AdminLTE
+import '@fortawesome/fontawesome-free/css/all.min.css'; // Icon (FontAwesome)
+import 'admin-lte/dist/js/adminlte.min.js';         // JS của AdminLTE
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
