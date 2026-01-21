@@ -128,8 +128,8 @@ const PlayerManager = () => {
                                 <button onClick={()=>handleAction(p,'kick')} className="btn btn-outline-warning btn-sm fw-bold px-3">Kick</button>
                                 <button onClick={()=>handleAction(p,'ban')} className="btn btn-outline-danger btn-sm fw-bold px-3">Ban</button>
                                 <div className="vr d-none d-md-block mx-1"></div>
-                                <button onClick={()=>handleOpAction(p,'op')} className="btn btn-light btn-sm text-warning fw-bold border">OP</button>
-                                <button onClick={()=>handleOpAction(p,'deop')} className="btn btn-light btn-sm text-secondary fw-bold border">Deop</button>
+                                <button onClick={()=>handleOpAction(p,'op')} className="btn btn-outline-primary btn-sm fw-bold px-3">OP</button>
+                                <button onClick={()=>handleOpAction(p,'deop')} className="btn btn-outline-secondary btn-sm fw-bold px-3">Deop</button>
                               </div>
                             </div>
                           </div>
