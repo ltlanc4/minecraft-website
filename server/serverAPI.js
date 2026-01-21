@@ -5,26 +5,65 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const { Rcon } = require('rcon-client');
 const si = require('systeminformation');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
-app.use(express.json());
-app.use(cors());
 
-// --- CẤU HÌNH ---
+// --- 1. BẢO MẬT: HELMET ---
+app.use(helmet());
+
+// --- 2. BẢO MẬT: CORS ---
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json({ limit: '10kb' }));
+
+// --- 3. BẢO MẬT: RATE LIMITING ---
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 200, 
+    message: { message: "Quá nhiều request, vui lòng thử lại sau 15 phút." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api', generalLimiter);
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { success: false, message: "Bạn đã thử đăng nhập quá nhiều lần. Hãy đợi 15 phút." }
+});
+
+// --- CẤU HÌNH RCON ---
 const RCON_OPTIONS = {
-    host: process.env.RCON_HOST,
-    port: parseInt(process.env.RCON_PORT),
-    password: process.env.RCON_PASSWORD,
+    host: process.env.RCON_HOST || 'localhost',
+    port: parseInt(process.env.RCON_PORT) || 25575,
+    password: process.env.RCON_PASSWORD || 'your_password',
     timeout: 5000, 
     tcp: true
 };
 
-
 let refreshTokens = []; 
 let dashboardCache = { data: null, lastUpdated: 0 };
-const CACHE_DURATION = 5000; // Cache 5 giây
+const CACHE_DURATION = 5000; 
 
-// --- HELPER FUNCTIONS ---
+// --- HELPER: VALIDATE INPUT ---
+const isValidMcName = (name) => /^[a-zA-Z0-9_]{3,16}$/.test(name);
+
+// --- HELPER: SANITIZE REASON (HỖ TRỢ TIẾNG VIỆT) ---
+// Hàm này chỉ xóa các ký tự nguy hiểm có thể gây lỗi lệnh RCON (; " \ ' $)
+// Còn lại giữ nguyên Tiếng Việt và các dấu câu thông thường (! ? , .)
+const sanitizeReason = (text) => {
+    if (!text) return "Admin Action";
+    // Thay thế các ký tự nguy hiểm bằng rỗng
+    return text.replace(/[;\\"'$<>{}]/g, "").trim();
+};
+
+// --- HELPER RCON ---
 async function sendRconCommand(command) {
     let rcon;
     try {
@@ -41,93 +80,59 @@ async function sendRconCommand(command) {
 
 async function getMinecraftData() {
     const now = Date.now();
-    // Cache: Nếu dữ liệu chưa cũ quá 5 giây thì trả về luôn
     if (dashboardCache.data && (now - dashboardCache.lastUpdated < CACHE_DURATION)) {
         return dashboardCache.data;
     }
 
     try {
         const rcon = await Rcon.connect(RCON_OPTIONS);
-        
-        // 1. LẤY LIST PLAYER
         const listResponse = await rcon.send('list');
         
-        // 2. LẤY TPS (Gửi lệnh 'spark health' hoặc 'tps' để lấy thông tin chi tiết)
         let tpsResponse = "";
         try {
-            // Thử lệnh tps thường
             tpsResponse = await rcon.send('tps');
-            
-            // Nếu server trả về lỗi hoặc không hiểu, thử lệnh spark tps hoặc spark health
             if (tpsResponse.includes("Unknown") || tpsResponse.includes("not found")) {
-                 // Spark thường trả về MSPT khi gõ lệnh này
                  tpsResponse = await rcon.send('spark tps');
             }
         } catch (e) {}
         
         await rcon.end();
 
-        // Debug: Log ra để kiểm tra
-        console.log("LOG RCON:", tpsResponse);
-
-        // 3. XỬ LÝ DỮ LIỆU
+        // Xử lý dữ liệu
         let current = 0, max = 0, players = [], tps = 20.0;
 
-        // A. Parse Player
         const countMatch = listResponse.match(/(\d+)\s*of\s*a\s*max\s*of\s*(\d+)/) || listResponse.match(/(\d+)\s*\/\s*(\d+)/);
-        if (countMatch) { 
-            current = parseInt(countMatch[1]); 
-            max = parseInt(countMatch[2]); 
-        }
+        if (countMatch) { current = parseInt(countMatch[1]); max = parseInt(countMatch[2]); }
         
         if (listResponse.includes(':')) {
             const namesPart = listResponse.split(':')[1];
             if (namesPart.trim()) players = namesPart.split(',').map(n => n.trim()).filter(n => n.length > 0);
         }
 
-        // B. Parse TPS (Logic mới cho Spark MSPT)
         if (tpsResponse) {
-            // Xóa mã màu
             const cleanTPS = tpsResponse.replace(/§[0-9a-fk-or]/g, "");
-
-            // CASE 1: Server trả về MSPT dạng "1.9/2.3/3.1/5.9" (Spark)
-            // Regex tìm chuỗi số dạng: so/so/so/so
-            const msptMatch = cleanTPS.match(/(\d+\.\d+)\/(\d+\.\d+)\/(\d+\.\d+)\/(\d+\.\d+)/);
+            const msptMatch = cleanTPS.match(/(\d+\.\d+)\/(\d+\.\d+)\/(\d+\.\d+)\/(\d+\.\d+)/); // Spark
             
             if (msptMatch) {
-                // Lấy số thứ 2 (Median - Trung vị) là chính xác nhất
                 const medianMspt = parseFloat(msptMatch[2]); 
-                
-                // Công thức: Nếu xử lý < 50ms thì TPS là 20. Nếu > 50ms thì lấy 1000/mspt
-                if (medianMspt <= 50.0) {
-                    tps = 20.0;
-                } else {
-                    tps = parseFloat((1000 / medianMspt).toFixed(1));
-                }
-                console.log(`Detected Spark MSPT: ${medianMspt}ms -> Calculated TPS: ${tps}`);
-            } 
-            // CASE 2: Server trả về TPS dạng "TPS: 19.5" (Paper/Spigot)
-            else {
-                const standardMatch = cleanTPS.match(/(\d{1,2}\.\d{1,2})/);
-                if (standardMatch) {
-                    tps = Math.min(parseFloat(standardMatch[0]), 20.0);
-                }
+                tps = medianMspt <= 50.0 ? 20.0 : parseFloat((1000 / medianMspt).toFixed(1));
+            } else {
+                const standardMatch = cleanTPS.match(/(\d{1,2}\.\d{1,2})/); // Paper/Spigot
+                if (standardMatch) tps = Math.min(parseFloat(standardMatch[0]), 20.0);
             }
         }
 
         const newData = { online: current, max: max, list: players, tps: tps };
-        
         dashboardCache.data = newData;
         dashboardCache.lastUpdated = now;
-
         return newData;
     } catch (e) {
-        console.error("Lỗi lấy data MC:", e.message);
+        console.error("Lỗi data MC:", e.message);
         return dashboardCache.data || { online: 0, max: 0, list: [], tps: 0 };
     }
 }
 
-// --- AUTH & ROUTES (GIỮ NGUYÊN KHÔNG ĐỔI) ---
+// --- MIDDLEWARE AUTH ---
 const authenticateToken = (req, res, next) => {
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'Chưa đăng nhập' });
@@ -138,8 +143,12 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
-app.post('/api/login', (req, res) => {
+// --- ROUTES ---
+
+app.post('/api/login', loginLimiter, (req, res) => {
     const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ success: false, message: "Thiếu thông tin" });
+
     try {
         const accounts = JSON.parse(fs.readFileSync('./data/accounts.json', 'utf8'));
         const user = accounts.find(a => a.username === username && a.password === password);
@@ -149,8 +158,10 @@ app.post('/api/login', (req, res) => {
             const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
             refreshTokens.push(refreshToken);
             res.json({ success: true, accessToken, refreshToken, user: payload });
-        } else { res.status(401).json({ success: false, message: 'Sai thông tin' }); }
-    } catch { res.status(500).json({ success: false }); }
+        } else {
+            res.status(401).json({ success: false, message: 'Sai thông tin đăng nhập' }); 
+        }
+    } catch { res.status(500).json({ success: false, message: "Lỗi server" }); }
 });
 
 app.post('/api/refresh', (req, res) => {
@@ -169,11 +180,13 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
-    const [cpu, mem, mc] = await Promise.all([si.currentLoad(), si.mem(), getMinecraftData()]);
-    res.json({
-        hardware: { cpu: cpu.currentLoad.toFixed(1), ram: ((mem.active / mem.total) * 100).toFixed(1) },
-        minecraft: mc
-    });
+    try {
+        const [cpu, mem, mc] = await Promise.all([si.currentLoad(), si.mem(), getMinecraftData()]);
+        res.json({
+            hardware: { cpu: cpu.currentLoad.toFixed(1), ram: ((mem.active / mem.total) * 100).toFixed(1) },
+            minecraft: mc
+        });
+    } catch (e) { res.status(500).json({ error: "Internal Error" }); }
 });
 
 app.get('/api/player/banlist', authenticateToken, async (req, res) => {
@@ -185,32 +198,47 @@ app.get('/api/player/banlist', authenticateToken, async (req, res) => {
     res.json({ list });
 });
 
+// --- CÁC ROUTE PLAYER ACTION ---
+
 app.post('/api/player/kick', authenticateToken, async (req, res) => {
     const { player, reason } = req.body;
-    res.json({ success: true, message: await sendRconCommand(`kick ${player} ${reason}`) });
+    if (!isValidMcName(player)) return res.status(400).json({ success: false, message: "Tên người chơi không hợp lệ" });
+    
+    // Sử dụng hàm sanitize mới cho phép tiếng Việt
+    const safeReason = sanitizeReason(reason);
+    
+    res.json({ success: true, message: await sendRconCommand(`kick ${player} ${safeReason}`) });
 });
 
 app.post('/api/player/ban', authenticateToken, async (req, res) => {
     const { player, reason } = req.body;
-    res.json({ success: true, message: await sendRconCommand(`ban ${player} ${reason}`) });
+    if (!isValidMcName(player)) return res.status(400).json({ success: false, message: "Tên người chơi không hợp lệ" });
+    
+    // Sử dụng hàm sanitize mới cho phép tiếng Việt
+    const safeReason = sanitizeReason(reason);
+    
+    res.json({ success: true, message: await sendRconCommand(`ban ${player} ${safeReason}`) });
 });
 
 app.post('/api/player/unban', authenticateToken, async (req, res) => {
-    const msg = await sendRconCommand(`pardon ${req.body.player}`);
+    const { player } = req.body;
+    if (!isValidMcName(player)) return res.status(400).json({ success: false, message: "Tên người chơi không hợp lệ" });
+
+    const msg = await sendRconCommand(`pardon ${player}`);
     if (msg.includes("Nothing changed")) return res.json({ success: false, message: "Không tìm thấy" });
     res.json({ success: true, message: msg });
 });
 
 app.post('/api/player/op', authenticateToken, async (req, res) => {
-    res.json({ success: true, message: await sendRconCommand(`op ${req.body.player}`) });
+    const { player } = req.body;
+    if (!isValidMcName(player)) return res.status(400).json({ success: false, message: "Tên người chơi không hợp lệ" });
+    res.json({ success: true, message: await sendRconCommand(`op ${player}`) });
 });
 
 app.post('/api/player/deop', authenticateToken, async (req, res) => {
-    res.json({ success: true, message: await sendRconCommand(`deop ${req.body.player}`) });
+    const { player } = req.body;
+    if (!isValidMcName(player)) return res.status(400).json({ success: false, message: "Tên người chơi không hợp lệ" });
+    res.json({ success: true, message: await sendRconCommand(`deop ${player}`) });
 });
 
-app.post('/api/player/command', authenticateToken, async (req, res) => {
-    res.json({ success: true, message: await sendRconCommand(req.body.command) });
-});
-
-app.listen(process.env.PORT || 5000, () => console.log('Server Running...'));
+app.listen(process.env.PORT || 5000, () => console.log('Server Securely Running (Vietnamese Support)...'));
