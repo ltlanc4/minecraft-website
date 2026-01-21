@@ -41,7 +41,7 @@ const Dashboard = ({ onNavigate }) => {
             <div className="col-12 col-sm-6 col-md-3">
               <div className="info-box shadow-sm">
                 <span className="info-box-icon bg-primary elevation-1"><i className="fas fa-memory"></i></span>
-                <div className="info-box-content"><span className="info-box-text text-muted">RAM Usage</span><span className="info-box-number h5 mb-1">{stats.ram}</span><div className="progress" style={{height:'4px'}}><div className="progress-bar bg-primary" style={{width:`${stats.ram}%`}}></div></div></div>
+                <div className="info-box-content"><span className="info-box-text text-muted">RAM Usage</span><span className="info-box-number h5 mb-1">{`${stats.ramUsage}GB | ${stats.ramTotal}GB`}</span><div className="progress" style={{height:'4px'}}><div className="progress-bar bg-primary" style={{width:`${stats.ram}%`}}></div></div></div>
               </div>
             </div>
             <div className="col-12 col-sm-6 col-md-3">
@@ -70,7 +70,7 @@ const Dashboard = ({ onNavigate }) => {
               <div className="card shadow-sm border-0 h-100">
                 <div className="card-header bg-white border-bottom-0 py-3 d-flex justify-content-between align-items-center">
                   <h5 className="m-0 fw-bold text-dark d-flex align-items-center"><i className="fas fa-users me-2 text-primary"></i>Online</h5>
-                  <span style={{ width: "65%" }}></span>
+                  <span style={{ width: "100%" }}></span>
                   <span className="badge bg-success rounded-pill px-3 py-2" style={{fontSize: '0.9rem'}}>{onlineList.length} / {stats.maxPlayers}</span>
                 </div>
                 <div className="card-body p-0" style={{ maxHeight: '380px', overflowY: 'auto' }}>

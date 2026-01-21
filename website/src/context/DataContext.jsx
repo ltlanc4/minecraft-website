@@ -4,7 +4,7 @@ import axiosClient from '../api/axiosClient';
 const DataContext = createContext();
 
 export const DataProvider = ({ children }) => {
-  const [stats, setStats] = useState({ cpu: 0, ram: 0, players: 0, maxPlayers: 0, tps: 20 });
+  const [stats, setStats] = useState({ cpu: 0, ram: 0, ramUsage: 0, ramTotal: 0, players: 0, maxPlayers: 0, tps: 20 });
   const [onlineList, setOnlineList] = useState([]);
   const [bannedList, setBannedList] = useState([]);
   
@@ -25,7 +25,7 @@ export const DataProvider = ({ children }) => {
 
       const data = resDash.data;
       setStats({
-        cpu: data.hardware.cpu, ram: data.hardware.ram,
+        cpu: data.hardware.cpu, ram: data.hardware.ram, ramUsage: data.hardware.ramUsage, ramTotal: data.hardware.ramTotal,
         players: data.minecraft.online, maxPlayers: data.minecraft.max, tps: data.minecraft.tps
       });
       setOnlineList(data.minecraft.list || []);
