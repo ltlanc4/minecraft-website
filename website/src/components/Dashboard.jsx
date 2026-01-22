@@ -58,7 +58,7 @@ const Dashboard = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="row">
+          <div className="row g-3">
             <div className="col-md-8">
               <div className="card shadow-sm h-100">
                 <div className="card-header border-0"><h3 className="card-title text-muted">Giám sát Tài nguyên</h3></div>

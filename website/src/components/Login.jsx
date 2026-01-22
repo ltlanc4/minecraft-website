@@ -64,13 +64,13 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="login-page bg-body-secondary d-flex justify-content-center align-items-center vh-100">
+    <div className="login-page bg-body-secondary d-flex justify-content-center align-items-center vh-100 px-3">
       {/* motion.div này CHỈ CÓ tác dụng hiện dần (Fade In) lúc mới vào trang.
          Tuyệt đối không có logic rung lắc (shake) nào ở đây.
       */}
       <motion.div 
         className="login-box" 
-        style={{ width: '430px' }}
+        style={{ width: '100%', maxWidth: '430px' }}
         initial={{ opacity: 0, y: -20 }} 
         animate={{ opacity: 1, y: 0 }} 
         transition={{ duration: 0.5 }}
