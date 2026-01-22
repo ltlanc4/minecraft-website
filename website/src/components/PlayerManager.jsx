@@ -95,8 +95,8 @@ const PlayerManager = () => {
           <div className="card card-primary card-outline card-outline-tabs border-0 shadow-none bg-transparent">
             <div className="card-header p-0 border-bottom-0 mb-3 bg-white rounded shadow-sm">
               <ul className="nav nav-tabs">
-                <li className="nav-item"><a className={`nav-link ${activeTab==='online'?'active fw-bold':''}`} onClick={()=>setActiveTab('online')} href="#"><i className="fas fa-signal me-2 text-success"></i>Online ({onlineList.length})</a></li>
-                <li className="nav-item"><a className={`nav-link ${activeTab==='banned'?'active fw-bold':''}`} onClick={()=>setActiveTab('banned')} href="#"><i className="fas fa-ban me-2 text-danger"></i>Banned ({bannedList.length})</a></li>
+                <li className="nav-item"><a className={`nav-link ${activeTab==='online'?'active border-bottom-0 border-success fw-bold':''}`} onClick={()=>setActiveTab('online')} href="#"><i className="fas fa-signal me-2 text-success"></i>Online ({onlineList.length})</a></li>
+                <li className="nav-item"><a className={`nav-link ${activeTab==='banned'?'active border-bottom-0 border-danger fw-bold':''}`} onClick={()=>setActiveTab('banned')} href="#"><i className="fas fa-ban me-2 text-danger"></i>Banned ({bannedList.length})</a></li>
               </ul>
             </div>
             
