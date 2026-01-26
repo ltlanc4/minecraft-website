@@ -7,22 +7,38 @@ const { Rcon } = require('rcon-client');
 const si = require('systeminformation');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 
-// --- 1. BẢO MẬT: HELMET ---
-app.use(helmet());
+// --- 1. CẤU HÌNH PROXY DYNMAP (ĐẶT ĐẦU TIÊN) ---
+// Giúp FE gọi map qua http://localhost:5000/api/map thay vì cổng 8123
+app.use('/api/map', createProxyMiddleware({
+    target: process.env.DYNMAP_URL,
+    changeOrigin: true,
+    ws: true, // Hỗ trợ WebSocket cho Map real-time
+    pathRewrite: { '^/api/map': '' },
+    onError: (err, req, res) => {
+        res.status(500).send('Không thể kết nối đến Dynmap Service.');
+    }
+}));
 
-// --- 2. BẢO MẬT: CORS ---
+// --- 2. BẢO MẬT & CẤU HÌNH ---
+app.use(helmet({
+    contentSecurityPolicy: false, 
+    frameguard: false 
+}));
+
+// --- 3. BẢO MẬT: CORS ---
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL,
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json({ limit: '10kb' }));
 
-// --- 3. BẢO MẬT: RATE LIMITING ---
+// --- 4. BẢO MẬT: RATE LIMITING ---
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
     max: 200, 
