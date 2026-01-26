@@ -7,38 +7,22 @@ const { Rcon } = require('rcon-client');
 const si = require('systeminformation');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 
-// --- 1. CẤU HÌNH PROXY DYNMAP (ĐẶT ĐẦU TIÊN) ---
-// Giúp FE gọi map qua http://localhost:5000/api/map thay vì cổng 8123
-app.use('/api/map', createProxyMiddleware({
-    target: process.env.DYNMAP_URL,
-    changeOrigin: true,
-    ws: true, // Hỗ trợ WebSocket cho Map real-time
-    pathRewrite: { '^/api/map': '' },
-    onError: (err, req, res) => {
-        res.status(500).send('Không thể kết nối đến Dynmap Service.');
-    }
-}));
+// --- 1. BẢO MẬT: HELMET ---
+app.use(helmet());
 
-// --- 2. BẢO MẬT & CẤU HÌNH ---
-app.use(helmet({
-    contentSecurityPolicy: false, 
-    frameguard: false 
-}));
-
-// --- 3. BẢO MẬT: CORS ---
+// --- 2. BẢO MẬT: CORS ---
 app.use(cors({
-    origin: process.env.FRONTEND_URL,
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json({ limit: '10kb' }));
 
-// --- 4. BẢO MẬT: RATE LIMITING ---
+// --- 3. BẢO MẬT: RATE LIMITING ---
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
     max: 200, 
@@ -267,22 +251,6 @@ app.post('/api/player/deop', authenticateToken, async (req, res) => {
     const { player } = req.body;
     if (!isValidMcName(player)) return res.status(400).json({ success: false, message: "Tên người chơi không hợp lệ" });
     res.json({ success: true, message: await sendRconCommand(`deop ${player}`) });
-});
-
-// --- API GỬI LỆNH RCON TÙY Ý (Dành cho Map Manager & Console) ---
-// Chỉ cho phép Admin (Role 1) sử dụng
-app.post('/api/rcon/execute', authenticateToken, async (req, res) => {
-    // Kiểm tra quyền Admin
-    if (!req.user || req.user.role !== 1) {
-        return res.status(403).json({ success: false, message: "Không có quyền thực hiện." });
-    }
-
-    const { command } = req.body;
-    if (!command) return res.status(400).json({ success: false, message: "Thiếu lệnh gửi đi." });
-
-    // Gửi lệnh
-    const response = await sendRconCommand(command);
-    res.json({ success: true, message: response });
 });
 
 app.listen(process.env.PORT || 5000, () => console.log('Server Securely Running (Permission Checked)...'));
