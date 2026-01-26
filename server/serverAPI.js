@@ -7,29 +7,14 @@ const { Rcon } = require('rcon-client');
 const si = require('systeminformation');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 
-// --- 1. CẤU HÌNH PROXY DYNMAP (ĐẶT ĐẦU TIÊN) ---
-// Giúp FE gọi map qua http://localhost:5000/api/map thay vì cổng 8123
-app.use('/api/map', createProxyMiddleware({
-    target: process.env.DYNMAP_URL,
-    changeOrigin: true,
-    ws: true, // Hỗ trợ WebSocket cho Map real-time
-    pathRewrite: { '^/api/map': '' },
-    onError: (err, req, res) => {
-        res.status(500).send('Không thể kết nối đến Dynmap Service.');
-    }
-}));
+// --- 1. BẢO MẬT & CẤU HÌNH ---
+app.set('trust proxy', 1);
+app.use(helmet());
 
-// --- 2. BẢO MẬT & CẤU HÌNH ---
-app.use(helmet({
-    contentSecurityPolicy: false, 
-    frameguard: false 
-}));
-
-// --- 3. BẢO MẬT: CORS ---
+// --- 2. BẢO MẬT: CORS ---
 app.use(cors({
     origin: process.env.FRONTEND_URL,
     methods: ['GET', 'POST'],
@@ -38,13 +23,17 @@ app.use(cors({
 
 app.use(express.json({ limit: '10kb' }));
 
-// --- 4. BẢO MẬT: RATE LIMITING ---
+// --- 3. BẢO MẬT: RATE LIMITING ---
 const generalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 200, 
+    windowMs: 15 * 60 * 1000,
+    max: 2000,
     message: { message: "Quá nhiều request, vui lòng thử lại sau 15 phút." },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req, res) => {
+        const ip = req.ip || req.connection.remoteAddress;
+        return ip === "::1" || ip === "127.0.0.1";
+    },
 });
 app.use('/api', generalLimiter);
 
@@ -59,13 +48,13 @@ const RCON_OPTIONS = {
     host: process.env.RCON_HOST,
     port: parseInt(process.env.RCON_PORT),
     password: process.env.RCON_PASSWORD,
-    timeout: 5000, 
+    timeout: 5000,
     tcp: true
 };
 
-let refreshTokens = []; 
+let refreshTokens = [];
 let dashboardCache = { data: null, lastUpdated: 0 };
-const CACHE_DURATION = 5000; 
+const CACHE_DURATION = 5000;
 
 // --- HELPER: VALIDATE INPUT ---
 const isValidMcName = (name) => /^[a-zA-Z0-9_]{3,16}$/.test(name);
@@ -87,7 +76,7 @@ async function sendRconCommand(command) {
         console.error(`[RCON Error] ${command}:`, error.message);
         return `Error: ${error.message}`;
     } finally {
-        if (rcon) try { await rcon.end(); } catch (e) {}
+        if (rcon) try { await rcon.end(); } catch (e) { }
     }
 }
 
@@ -100,15 +89,15 @@ async function getMinecraftData() {
     try {
         const rcon = await Rcon.connect(RCON_OPTIONS);
         const listResponse = await rcon.send('list');
-        
+
         let tpsResponse = "";
         try {
             tpsResponse = await rcon.send('tps');
             if (tpsResponse.includes("Unknown") || tpsResponse.includes("not found")) {
-                 tpsResponse = await rcon.send('spark tps');
+                tpsResponse = await rcon.send('spark tps');
             }
-        } catch (e) {}
-        
+        } catch (e) { }
+
         await rcon.end();
 
         // Xử lý dữ liệu
@@ -116,7 +105,7 @@ async function getMinecraftData() {
 
         const countMatch = listResponse.match(/(\d+)\s*of\s*a\s*max\s*of\s*(\d+)/) || listResponse.match(/(\d+)\s*\/\s*(\d+)/);
         if (countMatch) { current = parseInt(countMatch[1]); max = parseInt(countMatch[2]); }
-        
+
         if (listResponse.includes(':')) {
             const namesPart = listResponse.split(':')[1];
             if (namesPart.trim()) players = namesPart.split(',').map(n => n.trim()).filter(n => n.length > 0);
@@ -125,9 +114,9 @@ async function getMinecraftData() {
         if (tpsResponse) {
             const cleanTPS = tpsResponse.replace(/§[0-9a-fk-or]/g, "");
             const msptMatch = cleanTPS.match(/(\d+\.\d+)\/(\d+\.\d+)\/(\d+\.\d+)\/(\d+\.\d+)/); // Spark
-            
+
             if (msptMatch) {
-                const medianMspt = parseFloat(msptMatch[2]); 
+                const medianMspt = parseFloat(msptMatch[2]);
                 tps = medianMspt <= 50.0 ? 20.0 : parseFloat((1000 / medianMspt).toFixed(1));
             } else {
                 const standardMatch = cleanTPS.match(/(\d{1,2}\.\d{1,2})/); // Paper/Spigot
@@ -161,7 +150,7 @@ const authenticateToken = (req, res, next) => {
 // LOGIN ROUTE (ĐÃ CẬP NHẬT CHECK PERMISSION)
 app.post('/api/login', loginLimiter, (req, res) => {
     const { username, password } = req.body;
-    
+
     // 1. Log ra terminal để xem User nhập cái gì (Debug)
     console.log(`[LOGIN TRY] User: ${username} | Pass: ${password}`);
 
@@ -169,9 +158,9 @@ app.post('/api/login', loginLimiter, (req, res) => {
 
     try {
         const accounts = JSON.parse(fs.readFileSync('./data/accounts.json', 'utf8'));
-        
+
         const user = accounts.find(a => a.username === username && a.password === password);
-        
+
         if (user) {
 
             // --- FIX: Dùng parseInt để chấp nhận cả "1" và 1 ---
@@ -187,15 +176,15 @@ app.post('/api/login', loginLimiter, (req, res) => {
             const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' });
             const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
             refreshTokens.push(refreshToken);
-            
+
             res.json({ success: true, accessToken, refreshToken, user: payload });
         } else {
             console.log(`[LOGIN FAIL] Sai thông tin`);
-            res.status(401).json({ success: false, message: 'Sai tài khoản hoặc mật khẩu' }); 
+            res.status(401).json({ success: false, message: 'Sai tài khoản hoặc mật khẩu' });
         }
-    } catch (e) { 
+    } catch (e) {
         console.error("Lỗi đọc file/server:", e);
-        res.status(500).json({ success: false, message: "Lỗi server nội bộ" }); 
+        res.status(500).json({ success: false, message: "Lỗi server nội bộ" });
     }
 });
 
@@ -267,6 +256,22 @@ app.post('/api/player/deop', authenticateToken, async (req, res) => {
     const { player } = req.body;
     if (!isValidMcName(player)) return res.status(400).json({ success: false, message: "Tên người chơi không hợp lệ" });
     res.json({ success: true, message: await sendRconCommand(`deop ${player}`) });
+});
+
+// --- API GỬI LỆNH RCON TÙY Ý (Dành cho Map Manager & Console) ---
+// Chỉ cho phép Admin (Role 1) sử dụng
+app.post('/api/rcon/execute', authenticateToken, async (req, res) => {
+    // Kiểm tra quyền Admin
+    if (!req.user || req.user.permission !== 1) {
+        return res.status(403).json({ success: false, message: "Không có quyền thực hiện." });
+    }
+
+    const { command } = req.body;
+    if (!command) return res.status(400).json({ success: false, message: "Thiếu lệnh gửi đi." });
+
+    // Gửi lệnh
+    const response = await sendRconCommand(command);
+    res.json({ success: true, message: response });
 });
 
 app.listen(process.env.PORT || 5000, () => console.log('Server Securely Running (Permission Checked)...'));

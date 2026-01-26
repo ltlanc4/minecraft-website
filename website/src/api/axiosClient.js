@@ -1,9 +1,12 @@
 import axios from 'axios';
 import Swal from 'sweetalert2';
 
+const API_URL = `${process.env.API_URL}`;
+console.log(API_URL);
 const axiosClient = axios.create({
-  baseURL: `${process.env.API_URL}/api`,
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: `${API_URL.replace("undefined", "/")}server/api`,
+  headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', 'Bypass-Tunnel-Reminder': 'true' },
+  timeout: 20000,
 });
 
 axiosClient.interceptors.request.use(async (config) => {
@@ -43,7 +46,7 @@ axiosClient.interceptors.response.use(
         // Nếu không có refresh token thì thôi, không gọi api refresh làm gì
         if (!refreshToken) throw new Error("No refresh token");
 
-        const res = await axios.post(`${process.env.API_URL}/api/refresh`, { refreshToken });
+        const res = await axios.post(`${API_URL.replace("undefined", "/")}server/api/refresh`, { refreshToken });
         localStorage.setItem('accessToken', res.data.accessToken);
         originalConfig.headers.Authorization = `Bearer ${res.data.accessToken}`;
         return axiosClient(originalConfig);
